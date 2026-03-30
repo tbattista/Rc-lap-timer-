@@ -55,6 +55,7 @@ export async function startCamera(videoElement, log = () => {}) {
 
   log('Setting srcObject on video element...');
   videoElement.srcObject = stream;
+  videoElement.load(); // iOS Safari needs explicit load() to start processing the stream
   log(`srcObject set. readyState=${videoElement.readyState}, networkState=${videoElement.networkState}`);
 
   // Wait for metadata with a timeout
