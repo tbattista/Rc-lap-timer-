@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { startCamera, stopCamera } from './utils/camera';
+import TimerDisplay from './components/TimerDisplay';
+import LapHistory from './components/LapHistory';
 
 export default function App() {
   const videoRef = useRef(null);
@@ -8,6 +10,12 @@ export default function App() {
   const [cameraReady, setCameraReady] = useState(false);
   const [error, setError] = useState(null);
   const [debugLog, setDebugLog] = useState([]);
+
+  // Race state
+  const [raceState, setRaceState] = useState('idle');
+  const [laps, setLaps] = useState([]);
+  const [bestLap, setBestLap] = useState(null);
+  const [lapStartTime, setLapStartTime] = useState(null);
 
   const addLog = useCallback((msg) => {
     const ts = new Date().toLocaleTimeString();
@@ -59,6 +67,32 @@ export default function App() {
     };
   }, [addLog]);
 
+  const handleStart = useCallback(() => {
+    setRaceState('running');
+    setLaps([]);
+    setBestLap(null);
+    setLapStartTime(performance.now());
+  }, []);
+
+  const handleLap = useCallback(() => {
+    const now = performance.now();
+    const lapTime = now - lapStartTime;
+    setLaps((prev) => [...prev, lapTime]);
+    setBestLap((prev) => (prev === null || lapTime < prev) ? lapTime : prev);
+    setLapStartTime(now);
+  }, [lapStartTime]);
+
+  const handleStop = useCallback(() => {
+    setRaceState('stopped');
+  }, []);
+
+  const handleReset = useCallback(() => {
+    setRaceState('idle');
+    setLaps([]);
+    setBestLap(null);
+    setLapStartTime(null);
+  }, []);
+
   const debugPanel = debugLog.length > 0 && (
     <div className="debug-log">
       <div className="debug-log-header">Debug Log</div>
@@ -101,6 +135,37 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {cameraReady && (
+        <>
+          <TimerDisplay
+            raceState={raceState}
+            startTime={lapStartTime}
+            lapStartTime={lapStartTime}
+            bestLap={bestLap}
+            lapCount={laps.length}
+          />
+
+          <div className="controls">
+            <div className="controls-buttons">
+              {raceState === 'idle' && (
+                <button className="btn btn-primary" onClick={handleStart}>Start</button>
+              )}
+              {raceState === 'running' && (
+                <>
+                  <button className="btn btn-primary" onClick={handleLap}>Lap</button>
+                  <button className="btn btn-danger" onClick={handleStop}>Stop</button>
+                </>
+              )}
+              {raceState === 'stopped' && (
+                <button className="btn" onClick={handleReset}>Reset</button>
+              )}
+            </div>
+          </div>
+
+          <LapHistory laps={laps} bestLap={bestLap} />
+        </>
+      )}
 
       {cameraReady && debugPanel}
     </div>
