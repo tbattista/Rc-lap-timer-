@@ -106,6 +106,16 @@ body {
 .state-running { background: #0a3d0a; color: #00ff00; }
 .state-stopped { background: #3d0a0a; color: #ff4444; }
 
+/* Detection Status */
+.detection-status {
+  padding: 6px 16px;
+  background: #0a0a1a;
+  color: #8f8;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  text-align: center;
+}
+
 /* Controls */
 .controls {
   padding: 12px 16px;

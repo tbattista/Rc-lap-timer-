@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { loadOpenCV } from '../utils/opencv';
 
-export default function useDetector({ targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing }) {
+export default function useDetector({ targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing, onDebug }) {
   const cvRef = useRef(null);
   const runningRef = useRef(false);
   const frameIdRef = useRef(null);
@@ -45,10 +45,12 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
     const video = videoRef.current;
 
     if (!cv || !canvas || !video || !targetColor || !finishLine) {
-      // Use slower polling when waiting for dependencies instead of spinning at 60fps
+      if (!cv) onDebug?.('Waiting for OpenCV...');
+      else if (!targetColor) onDebug?.('No target color set');
+      else if (!finishLine) onDebug?.('No finish line set');
       frameIdRef.current = setTimeout(() => {
         frameIdRef.current = requestAnimationFrame(detectFrame);
-      }, cv ? 0 : 200); // 200ms backoff while waiting for OpenCV
+      }, cv ? 0 : 200);
       return;
     }
 
@@ -116,6 +118,7 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
       const threshold = (sensitivity || 50) / 1000; // 0.01 to 0.1 range
 
       const isCrossing = matchRatio > threshold;
+      onDebug?.(`match: ${(matchRatio * 100).toFixed(1)}% threshold: ${(threshold * 100).toFixed(1)}%${isCrossing ? ' CROSSING!' : ''}`);
       const now = performance.now();
 
       if (isCrossing && !wasCrossingRef.current) {
@@ -135,7 +138,7 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
     }
 
     frameIdRef.current = requestAnimationFrame(detectFrame);
-  }, [targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing, getLinePixels]);
+  }, [targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing, onDebug, getLinePixels]);
 
   const start = useCallback((canvas, video) => {
     canvasRef.current = canvas;

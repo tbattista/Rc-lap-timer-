@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { startCamera, stopCamera } from './utils/camera';
+import { loadOpenCV } from './utils/opencv';
 import CameraView from './components/CameraView';
 import TimerDisplay from './components/TimerDisplay';
 import Controls from './components/Controls';
@@ -35,6 +36,7 @@ export default function App() {
   const [sensitivity, setSensitivity] = useState(30);
   const [minLapTime, setMinLapTime] = useState(3000);
   const [tolerance, setTolerance] = useState(15);
+  const [detectionStatus, setDetectionStatus] = useState('');
 
   const addLog = useCallback((msg) => {
     const ts = new Date().toLocaleTimeString();
@@ -64,6 +66,10 @@ export default function App() {
     }
   }, [addLog]);
 
+  const handleDebug = useCallback((msg) => {
+    setDetectionStatus(msg);
+  }, []);
+
   const detector = useDetector({
     targetColor,
     tolerance,
@@ -71,6 +77,7 @@ export default function App() {
     sensitivity,
     minLapTime,
     onCrossing: handleCrossing,
+    onDebug: handleDebug,
   });
 
   // Load saved settings on mount
@@ -121,6 +128,14 @@ export default function App() {
 
         setCameraReady(true);
         addLog('Camera ready!');
+
+        // Preload OpenCV in the background after camera is stable
+        setTimeout(() => {
+          addLog('Preloading OpenCV...');
+          loadOpenCV()
+            .then(() => addLog('OpenCV loaded!'))
+            .catch(() => addLog('OpenCV preload failed — will retry when needed'));
+        }, 3000);
       } catch (err) {
         addLog(`ERROR: ${err.name}: ${err.message}`);
         if (!cancelled) {
@@ -296,6 +311,10 @@ export default function App() {
             hasLine={!!finishLine}
             hasColor={!!targetColor}
           />
+
+          {(raceState === 'armed' || raceState === 'running') && detectionStatus && (
+            <div className="detection-status">{detectionStatus}</div>
+          )}
 
           {raceState === 'running' && (
             <div className="controls">
