@@ -43,6 +43,7 @@ body {
 .camera-canvas {
   width: 100%;
   display: block;
+  background: #000;
 }
 
 .overlay-canvas {

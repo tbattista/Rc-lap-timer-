@@ -12,7 +12,6 @@ export default function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const drawRafRef = useRef(null);
 
   // Setup state
   const [mode, setMode] = useState('line'); // 'line' | 'color' | 'race'
@@ -142,27 +141,9 @@ export default function App() {
     return () => {
       cancelled = true;
       stopCamera(streamRef.current);
-      if (drawRafRef.current) cancelAnimationFrame(drawRafRef.current);
     };
   }, [addLog]);
 
-  // Draw video frames to canvas (always, for preview)
-  useEffect(() => {
-    if (!cameraReady) return;
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    const ctx = canvas.getContext('2d');
-
-    function draw() {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      drawRafRef.current = requestAnimationFrame(draw);
-    }
-    drawRafRef.current = requestAnimationFrame(draw);
-
-    return () => {
-      if (drawRafRef.current) cancelAnimationFrame(drawRafRef.current);
-    };
-  }, [cameraReady]);
 
   // Handle line point taps
   const handleSetLinePoint = useCallback((x, y) => {
@@ -180,8 +161,12 @@ export default function App() {
   // Handle color pick
   const handlePickColor = useCallback((x, y) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
     try {
+      // Snapshot current video frame to offscreen canvas for pixel reading
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const color = sampleColor(canvas, x, y, 8);
       setTargetColor(color.hsv);
       setTargetColorRgb(color.rgb);
@@ -238,24 +223,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* Persistent video element — never unmounted so the stream stays attached */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '1px',
-          height: '1px',
-          opacity: 0.01,
-          pointerEvents: 'none',
-          zIndex: -9999,
-        }}
-      />
-
       <header className="app-header">
         <h1>RC Lap Timer</h1>
       </header>
@@ -278,7 +245,7 @@ export default function App() {
       ) : null}
 
       <CameraView
-        canvasRef={canvasRef}
+        videoRef={videoRef}
         finishLine={finishLine}
         onSetLinePoint={handleSetLinePoint}
         onPickColor={handlePickColor}
@@ -286,6 +253,9 @@ export default function App() {
         targetColorRgb={targetColorRgb}
         cameraReady={cameraReady}
       />
+
+      {/* Hidden offscreen canvas for pixel operations (color sampling, detection) */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
 
       {cameraReady && (
         <>

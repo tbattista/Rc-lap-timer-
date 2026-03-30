@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 
 export default function CameraView({
-  canvasRef,
+  videoRef,
   finishLine,
   onSetLinePoint,
   onPickColor,
@@ -12,15 +12,15 @@ export default function CameraView({
   const overlayCanvasRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Sync overlay size when camera canvas resizes
+  // Sync overlay size with video dimensions
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const video = videoRef.current;
     const overlay = overlayCanvasRef.current;
-    if (canvas && overlay && cameraReady) {
-      overlay.width = canvas.width;
-      overlay.height = canvas.height;
+    if (video && overlay && cameraReady) {
+      overlay.width = video.videoWidth || 640;
+      overlay.height = video.videoHeight || 480;
     }
-  }, [canvasRef, cameraReady]);
+  }, [videoRef, cameraReady]);
 
   // Draw overlay (finish line + guides)
   const drawOverlay = useCallback(() => {
@@ -102,19 +102,29 @@ export default function CameraView({
   }, [mode, onSetLinePoint, onPickColor]);
 
   return (
-    <div className="camera-view" ref={containerRef} style={cameraReady ? undefined : { display: 'none' }}>
-      <canvas ref={canvasRef} className="camera-canvas" />
-      <canvas
-        ref={overlayCanvasRef}
-        className="overlay-canvas"
-        onClick={handleTap}
+    <div className="camera-view" ref={containerRef}>
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="camera-canvas"
       />
-      {targetColorRgb && (
-        <div className="color-swatch" style={{
-          backgroundColor: `rgb(${targetColorRgb.r},${targetColorRgb.g},${targetColorRgb.b})`,
-        }}>
-          <span>Car Color</span>
-        </div>
+      {cameraReady && (
+        <>
+          <canvas
+            ref={overlayCanvasRef}
+            className="overlay-canvas"
+            onClick={handleTap}
+          />
+          {targetColorRgb && (
+            <div className="color-swatch" style={{
+              backgroundColor: `rgb(${targetColorRgb.r},${targetColorRgb.g},${targetColorRgb.b})`,
+            }}>
+              <span>Car Color</span>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
