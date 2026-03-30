@@ -1,44 +1,5 @@
-let cvInstance = null;
-let cvPromise = null;
-
-export function loadOpenCV() {
-  if (cvInstance) return Promise.resolve(cvInstance);
-  if (cvPromise) return cvPromise;
-
-  cvPromise = new Promise((resolve, reject) => {
-    // Inject the script tag on demand if not already present
-    if (!document.querySelector('script[src*="opencv.js"]')) {
-      const script = document.createElement('script');
-      script.src = 'https://docs.opencv.org/4.9.0/opencv.js';
-      script.async = true;
-      document.head.appendChild(script);
-    }
-
-    let elapsed = 0;
-    const interval = 100;
-    const maxWait = 30000; // 30s timeout for CDN load
-    function check() {
-      if (window.cv && window.cv.Mat) {
-        cvInstance = window.cv;
-        resolve(cvInstance);
-      } else {
-        elapsed += interval;
-        if (elapsed >= maxWait) {
-          cvPromise = null; // allow retry
-          reject(new Error('OpenCV.js failed to load within 30s'));
-        } else {
-          setTimeout(check, interval);
-        }
-      }
-    }
-    check();
-  });
-
-  return cvPromise;
-}
-
 export function rgbToHsv(r, g, b) {
-  // Pure JS implementation — matches OpenCV's HSV convention (H:0-180, S:0-255, V:0-255)
+  // Pure JS — matches OpenCV's HSV convention (H:0-180, S:0-255, V:0-255)
   const rn = r / 255, gn = g / 255, bn = b / 255;
   const max = Math.max(rn, gn, bn);
   const min = Math.min(rn, gn, bn);
@@ -60,7 +21,7 @@ export function rgbToHsv(r, g, b) {
   const v = max;
 
   return {
-    h: Math.round(h / 2),       // 0-180 (OpenCV convention)
+    h: Math.round(h / 2),       // 0-180
     s: Math.round(s * 255),     // 0-255
     v: Math.round(v * 255),     // 0-255
   };

@@ -1,8 +1,7 @@
-import { useRef, useCallback, useEffect } from 'react';
-import { loadOpenCV } from '../utils/opencv';
+import { useRef, useCallback } from 'react';
+import { rgbToHsv } from '../utils/opencv';
 
 export default function useDetector({ targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing, onDebug }) {
-  const cvRef = useRef(null);
   const runningRef = useRef(false);
   const frameIdRef = useRef(null);
   const lastCrossingRef = useRef(0);
@@ -10,9 +9,6 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
   const lastFrameTimeRef = useRef(0);
-  const cvLoadingRef = useRef(false);
-
-  // OpenCV is loaded lazily when start() is called, not on mount
 
   const getLinePixels = useCallback((line, width, height, bandWidth = 6) => {
     if (!line) return null;
@@ -40,18 +36,17 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
   const detectFrame = useCallback(() => {
     if (!runningRef.current) return;
 
-    const cv = cvRef.current;
     const canvas = canvasRef.current;
     const video = videoRef.current;
 
-    if (!cv || !canvas || !video || !targetColor || !finishLine) {
+    if (!canvas || !video || !targetColor || !finishLine) {
       frameIdRef.current = requestAnimationFrame(detectFrame);
       return;
     }
 
-    // Throttle to ~15fps to avoid blocking the main thread with OpenCV operations
+    // Throttle to ~5fps — plenty for 30+ second laps
     const now = performance.now();
-    if (now - lastFrameTimeRef.current < 66) { // ~15fps
+    if (now - lastFrameTimeRef.current < 200) {
       frameIdRef.current = requestAnimationFrame(detectFrame);
       return;
     }
@@ -70,51 +65,35 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
       return;
     }
 
-    let src = null;
-    let hsv = null;
-    let mask = null;
-
     try {
-      src = cv.matFromImageData(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      hsv = new cv.Mat();
-      mask = new cv.Mat();
-
-      cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
-      const rgb = new cv.Mat();
-      hsv.copyTo(rgb);
-      cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
-      rgb.delete();
-
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      const w = canvas.width;
       const tol = tolerance || 15;
-      const lower = new cv.Mat(1, 1, cv.CV_8UC3);
-      const upper = new cv.Mat(1, 1, cv.CV_8UC3);
-      lower.data[0] = Math.max(0, targetColor.h - tol);
-      lower.data[1] = Math.max(0, targetColor.s - 50);
-      lower.data[2] = Math.max(0, targetColor.v - 50);
-      upper.data[0] = Math.min(180, targetColor.h + tol);
-      upper.data[1] = Math.min(255, targetColor.s + 50);
-      upper.data[2] = Math.min(255, targetColor.v + 50);
 
-      cv.inRange(hsv, lower, upper, mask);
-      lower.delete();
-      upper.delete();
+      const hLow = Math.max(0, targetColor.h - tol);
+      const hHigh = Math.min(180, targetColor.h + tol);
+      const sLow = Math.max(0, targetColor.s - 50);
+      const sHigh = Math.min(255, targetColor.s + 50);
+      const vLow = Math.max(0, targetColor.v - 50);
+      const vHigh = Math.min(255, targetColor.v + 50);
 
-      // Count matching pixels in the finish line zone
       let matchCount = 0;
-      const maskData = mask.data;
-      const w = mask.cols;
       for (const { x, y } of linePixels) {
-        if (maskData[y * w + x] > 0) {
+        const idx = (y * w + x) * 4;
+        const hsv = rgbToHsv(data[idx], data[idx + 1], data[idx + 2]);
+        if (hsv.h >= hLow && hsv.h <= hHigh &&
+            hsv.s >= sLow && hsv.s <= sHigh &&
+            hsv.v >= vLow && hsv.v <= vHigh) {
           matchCount++;
         }
       }
 
       const matchRatio = matchCount / linePixels.length;
-      const threshold = (sensitivity || 50) / 1000; // 0.01 to 0.1 range
+      const threshold = (sensitivity || 50) / 1000;
 
       const isCrossing = matchRatio > threshold;
-      onDebug?.(`match: ${(matchRatio * 100).toFixed(1)}% threshold: ${(threshold * 100).toFixed(1)}%${isCrossing ? ' CROSSING!' : ''}`);
-      const now = performance.now();
+      onDebug?.(`match: ${(matchRatio * 100).toFixed(1)}% thresh: ${(threshold * 100).toFixed(1)}%${isCrossing ? ' CROSSING!' : ''}`);
 
       if (isCrossing && !wasCrossingRef.current) {
         const elapsed = now - lastCrossingRef.current;
@@ -126,10 +105,6 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
       wasCrossingRef.current = isCrossing;
     } catch (e) {
       console.error('Detection error:', e);
-    } finally {
-      src?.delete();
-      hsv?.delete();
-      mask?.delete();
     }
 
     frameIdRef.current = requestAnimationFrame(detectFrame);
@@ -138,25 +113,17 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
   const start = useCallback((canvas, video) => {
     canvasRef.current = canvas;
     videoRef.current = video;
+    runningRef.current = true;
     lastCrossingRef.current = 0;
     wasCrossingRef.current = false;
-    onDebug?.('Loading detection engine...');
-    // Load OpenCV first, then start detection loop
-    loadOpenCV().then((cv) => {
-      cvRef.current = cv;
-      runningRef.current = true;
-      onDebug?.('Detection active');
-      frameIdRef.current = requestAnimationFrame(detectFrame);
-    }).catch((err) => {
-      onDebug?.(`OpenCV failed to load: ${err.message}`);
-    });
+    onDebug?.('Detection active');
+    frameIdRef.current = requestAnimationFrame(detectFrame);
   }, [detectFrame, onDebug]);
 
   const stop = useCallback(() => {
     runningRef.current = false;
     if (frameIdRef.current) {
       cancelAnimationFrame(frameIdRef.current);
-      clearTimeout(frameIdRef.current);
       frameIdRef.current = null;
     }
   }, []);
