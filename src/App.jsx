@@ -131,12 +131,19 @@ export default function App() {
       }
     }
 
-    // Timeout watchdog
+    // Timeout watchdog - actually recover instead of just logging
+    let timedOut = false;
     const timeout = setTimeout(() => {
-      addLog('TIMEOUT: camera init took >10s, still waiting...');
+      timedOut = true;
+      addLog('TIMEOUT: camera init took >10s');
+      if (!cancelled) {
+        setError('Camera took too long to start. Please reload and allow camera access promptly.');
+      }
     }, 10000);
 
-    init().finally(() => clearTimeout(timeout));
+    init().finally(() => {
+      clearTimeout(timeout);
+    });
 
     return () => {
       cancelled = true;

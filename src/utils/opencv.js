@@ -5,13 +5,22 @@ export function loadOpenCV() {
   if (cvInstance) return Promise.resolve(cvInstance);
   if (cvPromise) return cvPromise;
 
-  cvPromise = new Promise((resolve) => {
+  cvPromise = new Promise((resolve, reject) => {
+    let elapsed = 0;
+    const interval = 100;
+    const maxWait = 30000; // 30s timeout for CDN load
     function check() {
       if (window.cv && window.cv.Mat) {
         cvInstance = window.cv;
         resolve(cvInstance);
       } else {
-        setTimeout(check, 100);
+        elapsed += interval;
+        if (elapsed >= maxWait) {
+          cvPromise = null; // allow retry
+          reject(new Error('OpenCV.js failed to load within 30s'));
+        } else {
+          setTimeout(check, interval);
+        }
       }
     }
     check();
