@@ -38,18 +38,32 @@ export function loadOpenCV() {
 }
 
 export function rgbToHsv(r, g, b) {
-  const mat = new window.cv.Mat(1, 1, window.cv.CV_8UC3);
-  mat.data[0] = r;
-  mat.data[1] = g;
-  mat.data[2] = b;
-  const hsv = new window.cv.Mat();
-  window.cv.cvtColor(mat, hsv, window.cv.COLOR_RGB2HSV);
-  const h = hsv.data[0];
-  const s = hsv.data[1];
-  const v = hsv.data[2];
-  mat.delete();
-  hsv.delete();
-  return { h, s, v };
+  // Pure JS implementation — matches OpenCV's HSV convention (H:0-180, S:0-255, V:0-255)
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta > 0) {
+    if (max === rn) {
+      h = 60 * (((gn - bn) / delta) % 6);
+    } else if (max === gn) {
+      h = 60 * ((bn - rn) / delta + 2);
+    } else {
+      h = 60 * ((rn - gn) / delta + 4);
+    }
+  }
+  if (h < 0) h += 360;
+
+  const s = max === 0 ? 0 : delta / max;
+  const v = max;
+
+  return {
+    h: Math.round(h / 2),       // 0-180 (OpenCV convention)
+    s: Math.round(s * 255),     // 0-255
+    v: Math.round(v * 255),     // 0-255
+  };
 }
 
 export function sampleColor(canvas, x, y, radius = 5) {
