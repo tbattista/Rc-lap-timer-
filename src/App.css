@@ -273,3 +273,10 @@ body {
   color: #ff4444;
   font-size: 16px;
 }
+
+.loading-message {
+  padding: 64px 16px;
+  text-align: center;
+  color: #888;
+  font-size: 18px;
+}

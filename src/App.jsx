@@ -91,29 +91,32 @@ export default function App() {
 
   // Start camera
   useEffect(() => {
+    let cancelled = false;
     async function init() {
       try {
         const video = videoRef.current;
         if (!video) return;
         const stream = await startCamera(video);
+        if (cancelled) { stopCamera(stream); return; }
         streamRef.current = stream;
 
-        // Wait for video dimensions
-        await new Promise((resolve) => {
-          video.onloadedmetadata = resolve;
-        });
-
+        // Set canvas to match video dimensions
         const canvas = canvasRef.current;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        const w = video.videoWidth || 640;
+        const h = video.videoHeight || 480;
+        canvas.width = w;
+        canvas.height = h;
         setCameraReady(true);
       } catch (err) {
-        setError('Camera access denied. Please allow camera permissions and reload.');
-        console.error(err);
+        if (!cancelled) {
+          setError('Camera access failed. Please allow camera permissions and reload.');
+          console.error(err);
+        }
       }
     }
     init();
     return () => {
+      cancelled = true;
       stopCamera(streamRef.current);
       if (drawRafRef.current) cancelAnimationFrame(drawRafRef.current);
     };
@@ -211,6 +214,19 @@ export default function App() {
     );
   }
 
+  if (!cameraReady) {
+    return (
+      <div className="app">
+        <header className="app-header">
+          <h1>RC Lap Timer</h1>
+        </header>
+        <div className="loading-message">Starting camera...</div>
+        <video ref={videoRef} playsInline muted style={{ display: 'none' }} />
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -225,6 +241,7 @@ export default function App() {
         onPickColor={handlePickColor}
         mode={mode}
         targetColorRgb={targetColorRgb}
+        cameraReady={cameraReady}
       />
 
       <TimerDisplay

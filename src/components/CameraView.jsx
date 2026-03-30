@@ -8,9 +8,20 @@ export default function CameraView({
   onPickColor,
   mode, // 'line' | 'color' | 'race'
   targetColorRgb,
+  cameraReady,
 }) {
   const overlayCanvasRef = useRef(null);
   const containerRef = useRef(null);
+
+  // Sync overlay size when camera canvas resizes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const overlay = overlayCanvasRef.current;
+    if (canvas && overlay && cameraReady) {
+      overlay.width = canvas.width;
+      overlay.height = canvas.height;
+    }
+  }, [canvasRef, cameraReady]);
 
   // Draw overlay (finish line + guides)
   const drawOverlay = useCallback(() => {
@@ -70,16 +81,10 @@ export default function CameraView({
     drawOverlay();
   }, [drawOverlay]);
 
-  // Sync overlay canvas size with main canvas
+  // Redraw overlay when camera becomes ready
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const overlay = overlayCanvasRef.current;
-    if (canvas && overlay) {
-      overlay.width = canvas.width;
-      overlay.height = canvas.height;
-      drawOverlay();
-    }
-  }, [canvasRef, drawOverlay]);
+    if (cameraReady) drawOverlay();
+  }, [cameraReady, drawOverlay]);
 
   const handleTap = useCallback((e) => {
     const overlay = overlayCanvasRef.current;

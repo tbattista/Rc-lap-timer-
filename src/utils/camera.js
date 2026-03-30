@@ -10,6 +10,14 @@ export async function startCamera(videoElement) {
 
   const stream = await navigator.mediaDevices.getUserMedia(constraints);
   videoElement.srcObject = stream;
+
+  // Wait for metadata - handle both cases: already loaded or not yet
+  if (videoElement.readyState < 1) {
+    await new Promise((resolve) => {
+      videoElement.addEventListener('loadedmetadata', resolve, { once: true });
+    });
+  }
+
   await videoElement.play();
   return stream;
 }
