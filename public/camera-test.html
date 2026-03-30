@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Camera Diagnostic Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, sans-serif; background: #111; color: #eee; padding: 12px; }
+    h1 { font-size: 18px; margin-bottom: 12px; color: #e94560; }
+    h2 { font-size: 14px; margin: 16px 0 8px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+    .test { padding: 8px 12px; margin: 4px 0; border-radius: 6px; font-size: 13px; font-family: monospace; }
+    .pass { background: #0a3d0a; color: #4f4; }
+    .fail { background: #3d0a0a; color: #f44; }
+    .info { background: #1a1a3e; color: #88f; }
+    .warn { background: #3d3a0a; color: #ff0; }
+    .running { background: #333; color: #ccc; }
+    button { padding: 14px 24px; font-size: 16px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; margin: 8px 4px; }
+    .btn-start { background: #e94560; color: #fff; width: 100%; }
+    .btn-stop { background: #dc3545; color: #fff; }
+    #video-container { margin: 12px 0; background: #000; border-radius: 8px; overflow: hidden; }
+    video { width: 100%; display: block; }
+    canvas { width: 100%; display: block; margin-top: 8px; border: 1px solid #333; border-radius: 8px; }
+    #log { max-height: 300px; overflow-y: auto; margin-top: 12px; }
+    .section { margin-bottom: 20px; border: 1px solid #333; border-radius: 8px; padding: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Camera Diagnostic Tests</h1>
+  <p style="font-size:12px;color:#888;margin-bottom:12px;">
+    Open this page on your phone to diagnose camera issues. Tap "Start All Tests" — camera permission will be requested.
+  </p>
+
+  <button class="btn-start" id="startBtn" onclick="runAllTests()">Start All Tests (tap here first!)</button>
+
+  <div class="section">
+    <h2>Test 1: Browser Support</h2>
+    <div id="test-support"></div>
+  </div>
+
+  <div class="section">
+    <h2>Test 2: Camera Access (getUserMedia)</h2>
+    <div id="test-camera"></div>
+  </div>
+
+  <div class="section">
+    <h2>Test 3: Video Element - Direct Display</h2>
+    <div id="video-container">
+      <video id="testVideo" autoplay playsinline muted></video>
+    </div>
+    <div id="test-video"></div>
+  </div>
+
+  <div class="section">
+    <h2>Test 4: Canvas drawImage from Video</h2>
+    <canvas id="testCanvas"></canvas>
+    <div id="test-canvas"></div>
+  </div>
+
+  <div class="section">
+    <h2>Test 5: Hidden Video to Canvas</h2>
+    <video id="hiddenVideo" autoplay playsinline muted style="position:fixed;opacity:0.01;width:1px;height:1px;pointer-events:none;z-index:-9999;"></video>
+    <canvas id="hiddenCanvas"></canvas>
+    <div id="test-hidden"></div>
+  </div>
+
+  <div class="section">
+    <h2>Test 6: Environment Info</h2>
+    <div id="test-env"></div>
+  </div>
+
+  <div class="section">
+    <h2>Full Log</h2>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    let globalStream = null;
+
+    function log(section, msg, type = 'info') {
+      const el = document.getElementById(section);
+      const div = document.createElement('div');
+      div.className = `test ${type}`;
+      div.textContent = msg;
+      el.appendChild(div);
+
+      const logEl = document.getElementById('log');
+      const logDiv = document.createElement('div');
+      logDiv.className = `test ${type}`;
+      logDiv.textContent = `[${section}] ${msg}`;
+      logEl.appendChild(logDiv);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function testSupport() {
+      log('test-support', 'Testing browser APIs...', 'running');
+
+      // Check HTTPS
+      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      log('test-support', `Protocol: ${location.protocol} ${isSecure ? '(OK)' : '(FAIL - needs HTTPS!)'}`, isSecure ? 'pass' : 'fail');
+
+      // Check navigator.mediaDevices
+      if (navigator.mediaDevices) {
+        log('test-support', 'navigator.mediaDevices: EXISTS', 'pass');
+      } else {
+        log('test-support', 'navigator.mediaDevices: MISSING - camera will not work!', 'fail');
+        return false;
+      }
+
+      // Check getUserMedia
+      if (navigator.mediaDevices.getUserMedia) {
+        log('test-support', 'navigator.mediaDevices.getUserMedia: EXISTS', 'pass');
+      } else {
+        log('test-support', 'navigator.mediaDevices.getUserMedia: MISSING!', 'fail');
+        return false;
+      }
+
+      // Check enumerateDevices
+      if (navigator.mediaDevices.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(d => d.kind === 'videoinput');
+          log('test-support', `Video devices found: ${videoDevices.length}`, videoDevices.length > 0 ? 'pass' : 'warn');
+          videoDevices.forEach((d, i) => {
+            log('test-support', `  Device ${i}: ${d.label || '(no label until permission)'} id=${d.deviceId.substring(0, 8)}...`, 'info');
+          });
+        } catch (e) {
+          log('test-support', `enumerateDevices error: ${e.message}`, 'warn');
+        }
+      }
+
+      return true;
+    }
+
+    async function testCamera() {
+      log('test-camera', 'Requesting camera access...', 'running');
+
+      const constraintsList = [
+        { label: 'environment (exact)', constraints: { video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false } },
+        { label: 'environment (ideal)', constraints: { video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false } },
+        { label: 'any camera (simple)', constraints: { video: true, audio: false } },
+        { label: 'front camera', constraints: { video: { facingMode: 'user' }, audio: false } },
+      ];
+
+      for (const { label, constraints } of constraintsList) {
+        log('test-camera', `Trying: ${label}...`, 'running');
+        try {
+          const stream = await Promise.race([
+            navigator.mediaDevices.getUserMedia(constraints),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout after 8s')), 8000))
+          ]);
+          const tracks = stream.getTracks();
+          log('test-camera', `SUCCESS with "${label}"!`, 'pass');
+          tracks.forEach(t => {
+            const settings = t.getSettings ? t.getSettings() : {};
+            log('test-camera', `  Track: ${t.kind}, state=${t.readyState}, ${settings.width}x${settings.height}, facing=${settings.facingMode || 'unknown'}`, 'pass');
+          });
+          globalStream = stream;
+          return stream;
+        } catch (e) {
+          log('test-camera', `FAILED "${label}": ${e.name}: ${e.message}`, e.name === 'NotAllowedError' ? 'fail' : 'warn');
+          if (e.name === 'NotAllowedError') {
+            log('test-camera', 'Permission denied! User must grant camera access.', 'fail');
+            return null;
+          }
+        }
+      }
+
+      log('test-camera', 'ALL constraint attempts failed!', 'fail');
+      return null;
+    }
+
+    async function testVideoDisplay(stream) {
+      const video = document.getElementById('testVideo');
+      log('test-video', 'Setting srcObject on visible video element...', 'running');
+
+      // Set all iOS attributes
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      video.muted = true;
+      video.playsInline = true;
+
+      video.srcObject = stream;
+
+      // Try load()
+      try {
+        video.load();
+        log('test-video', 'video.load() called', 'info');
+      } catch (e) {
+        log('test-video', `video.load() error: ${e.message}`, 'warn');
+      }
+
+      // Wait for metadata
+      log('test-video', `readyState before metadata: ${video.readyState}`, 'info');
+      if (video.readyState < 1) {
+        try {
+          await Promise.race([
+            new Promise(resolve => video.addEventListener('loadedmetadata', resolve, { once: true })),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+          ]);
+          log('test-video', `Metadata loaded! readyState=${video.readyState}`, 'pass');
+        } catch (e) {
+          log('test-video', `Metadata wait failed: ${e.message}`, 'fail');
+        }
+      } else {
+        log('test-video', `Metadata already available. readyState=${video.readyState}`, 'pass');
+      }
+
+      log('test-video', `Video dimensions: ${video.videoWidth}x${video.videoHeight}`, video.videoWidth > 0 ? 'pass' : 'fail');
+
+      // Try play()
+      try {
+        await video.play();
+        log('test-video', 'video.play() succeeded!', 'pass');
+      } catch (e) {
+        log('test-video', `video.play() FAILED: ${e.name}: ${e.message}`, 'fail');
+      }
+
+      // Check if video is actually rendering after a short delay
+      await new Promise(r => setTimeout(r, 500));
+      log('test-video', `After 500ms: readyState=${video.readyState}, paused=${video.paused}, ended=${video.ended}`, video.readyState >= 2 ? 'pass' : 'warn');
+      log('test-video', `Video element size: ${video.clientWidth}x${video.clientHeight}`, video.clientWidth > 0 ? 'pass' : 'fail');
+
+      // Check if video has non-zero dimensions in getBoundingClientRect
+      const rect = video.getBoundingClientRect();
+      log('test-video', `BoundingRect: ${Math.round(rect.width)}x${Math.round(rect.height)}`, rect.height > 0 ? 'pass' : 'fail');
+
+      return video;
+    }
+
+    async function testCanvasDrawImage(video) {
+      const canvas = document.getElementById('testCanvas');
+      log('test-canvas', 'Testing drawImage from VISIBLE video to canvas...', 'running');
+
+      const w = video.videoWidth || 640;
+      const h = video.videoHeight || 480;
+      canvas.width = w;
+      canvas.height = h;
+
+      // Wait for video to have enough data
+      if (video.readyState < 2) {
+        log('test-canvas', `Waiting for HAVE_CURRENT_DATA (readyState >= 2)...`, 'running');
+        await Promise.race([
+          new Promise(resolve => {
+            video.addEventListener('canplay', resolve, { once: true });
+          }),
+          new Promise(r => setTimeout(r, 3000))
+        ]);
+      }
+
+      const ctx = canvas.getContext('2d');
+
+      // Draw and check for non-black pixels
+      ctx.drawImage(video, 0, 0, w, h);
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+
+      let nonBlackPixels = 0;
+      let totalPixels = data.length / 4;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 10 || data[i + 1] > 10 || data[i + 2] > 10) {
+          nonBlackPixels++;
+        }
+      }
+
+      const pct = Math.round((nonBlackPixels / totalPixels) * 100);
+      log('test-canvas', `Canvas ${w}x${h}: ${pct}% non-black pixels`, pct > 5 ? 'pass' : 'fail');
+
+      if (pct <= 5) {
+        log('test-canvas', 'Canvas is mostly black! drawImage may not work on this device.', 'fail');
+
+        // Try again after a delay
+        await new Promise(r => setTimeout(r, 1000));
+        ctx.drawImage(video, 0, 0, w, h);
+        const imageData2 = ctx.getImageData(0, 0, w, h);
+        let nonBlack2 = 0;
+        for (let i = 0; i < imageData2.data.length; i += 4) {
+          if (imageData2.data[i] > 10 || imageData2.data[i + 1] > 10 || imageData2.data[i + 2] > 10) nonBlack2++;
+        }
+        const pct2 = Math.round((nonBlack2 / totalPixels) * 100);
+        log('test-canvas', `Retry after 1s: ${pct2}% non-black pixels`, pct2 > 5 ? 'pass' : 'fail');
+      }
+    }
+
+    async function testHiddenVideoToCanvas(stream) {
+      const video = document.getElementById('hiddenVideo');
+      const canvas = document.getElementById('hiddenCanvas');
+
+      log('test-hidden', 'Testing drawImage from HIDDEN (opacity:0.01) video...', 'running');
+
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      video.muted = true;
+      video.playsInline = true;
+      video.srcObject = stream.clone();
+
+      try { video.load(); } catch (e) {}
+
+      if (video.readyState < 1) {
+        await Promise.race([
+          new Promise(resolve => video.addEventListener('loadedmetadata', resolve, { once: true })),
+          new Promise(r => setTimeout(r, 5000))
+        ]);
+      }
+
+      try {
+        await video.play();
+        log('test-hidden', 'Hidden video play() succeeded', 'pass');
+      } catch (e) {
+        log('test-hidden', `Hidden video play() FAILED: ${e.message}`, 'fail');
+      }
+
+      await new Promise(r => setTimeout(r, 1000));
+
+      const w = video.videoWidth || 640;
+      const h = video.videoHeight || 480;
+      canvas.width = w;
+      canvas.height = h;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, w, h);
+
+      const imageData = ctx.getImageData(0, 0, w, h);
+      let nonBlack = 0;
+      const totalPixels = imageData.data.length / 4;
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        if (imageData.data[i] > 10 || imageData.data[i + 1] > 10 || imageData.data[i + 2] > 10) nonBlack++;
+      }
+
+      const pct = Math.round((nonBlack / totalPixels) * 100);
+      log('test-hidden', `Hidden video canvas: ${pct}% non-black pixels`, pct > 5 ? 'pass' : 'fail');
+
+      if (pct <= 5) {
+        log('test-hidden', 'CONFIRMED: drawImage from hidden video produces black on this device!', 'fail');
+        log('test-hidden', 'This means the app MUST show the <video> element directly.', 'warn');
+      }
+
+      // Stop the cloned stream
+      video.srcObject.getTracks().forEach(t => t.stop());
+    }
+
+    function testEnvironment() {
+      log('test-env', `UserAgent: ${navigator.userAgent}`, 'info');
+      log('test-env', `Platform: ${navigator.platform}`, 'info');
+      log('test-env', `URL: ${location.href}`, 'info');
+      log('test-env', `Protocol: ${location.protocol}`, location.protocol === 'https:' ? 'pass' : 'warn');
+      log('test-env', `Screen: ${screen.width}x${screen.height} (${window.devicePixelRatio}x)`, 'info');
+      log('test-env', `Window: ${window.innerWidth}x${window.innerHeight}`, 'info');
+
+      // Detect iOS
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      log('test-env', `iOS detected: ${isIOS}`, isIOS ? 'warn' : 'info');
+
+      // Detect Safari
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      log('test-env', `Safari: ${isSafari}`, 'info');
+
+      // Detect Chrome on iOS (uses WebKit)
+      const isChromeIOS = /CriOS/.test(navigator.userAgent);
+      log('test-env', `Chrome on iOS: ${isChromeIOS}`, isChromeIOS ? 'warn' : 'info');
+
+      // Check Permissions API
+      if (navigator.permissions) {
+        navigator.permissions.query({ name: 'camera' }).then(result => {
+          log('test-env', `Camera permission state: ${result.state}`, result.state === 'granted' ? 'pass' : 'info');
+        }).catch(e => {
+          log('test-env', `Permissions API not supported for camera: ${e.message}`, 'info');
+        });
+      }
+    }
+
+    async function runAllTests() {
+      document.getElementById('startBtn').textContent = 'Running tests...';
+      document.getElementById('startBtn').disabled = true;
+
+      // Clear previous results
+      ['test-support', 'test-camera', 'test-video', 'test-canvas', 'test-hidden', 'test-env', 'log'].forEach(id => {
+        document.getElementById(id).innerHTML = '';
+      });
+
+      try {
+        testEnvironment();
+
+        const supported = await testSupport();
+        if (!supported) {
+          log('test-support', 'Cannot continue - browser does not support camera APIs', 'fail');
+          return;
+        }
+
+        const stream = await testCamera();
+        if (!stream) {
+          log('test-camera', 'Cannot continue - no camera stream obtained', 'fail');
+          return;
+        }
+
+        // Re-enumerate devices now that we have permission
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(d => d.kind === 'videoinput');
+          log('test-support', `After permission - video devices: ${videoDevices.length}`, 'pass');
+          videoDevices.forEach((d, i) => {
+            log('test-support', `  ${i}: "${d.label}" id=${d.deviceId.substring(0, 12)}...`, 'info');
+          });
+        } catch (e) {}
+
+        const video = await testVideoDisplay(stream);
+        await testCanvasDrawImage(video);
+        await testHiddenVideoToCanvas(stream);
+
+        log('log', '=== ALL TESTS COMPLETE ===', 'pass');
+
+      } catch (e) {
+        log('log', `UNEXPECTED ERROR: ${e.name}: ${e.message}`, 'fail');
+        log('log', e.stack, 'fail');
+      }
+
+      document.getElementById('startBtn').textContent = 'Run Tests Again';
+      document.getElementById('startBtn').disabled = false;
+    }
+  </script>
+</body>
+</html>
