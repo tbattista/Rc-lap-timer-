@@ -45,12 +45,7 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
     const video = videoRef.current;
 
     if (!cv || !canvas || !video || !targetColor || !finishLine) {
-      if (!cv) onDebug?.('Waiting for OpenCV...');
-      else if (!targetColor) onDebug?.('No target color set');
-      else if (!finishLine) onDebug?.('No finish line set');
-      frameIdRef.current = setTimeout(() => {
-        frameIdRef.current = requestAnimationFrame(detectFrame);
-      }, cv ? 0 : 200);
+      frameIdRef.current = requestAnimationFrame(detectFrame);
       return;
     }
 
@@ -143,13 +138,19 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
   const start = useCallback((canvas, video) => {
     canvasRef.current = canvas;
     videoRef.current = video;
-    runningRef.current = true;
     lastCrossingRef.current = 0;
     wasCrossingRef.current = false;
-    // Load OpenCV in background — detectFrame polls until it's ready
-    loadOpenCV().then((cv) => { cvRef.current = cv; }).catch(() => {});
-    frameIdRef.current = requestAnimationFrame(detectFrame);
-  }, [detectFrame]);
+    onDebug?.('Loading detection engine...');
+    // Load OpenCV first, then start detection loop
+    loadOpenCV().then((cv) => {
+      cvRef.current = cv;
+      runningRef.current = true;
+      onDebug?.('Detection active');
+      frameIdRef.current = requestAnimationFrame(detectFrame);
+    }).catch((err) => {
+      onDebug?.(`OpenCV failed to load: ${err.message}`);
+    });
+  }, [detectFrame, onDebug]);
 
   const stop = useCallback(() => {
     runningRef.current = false;

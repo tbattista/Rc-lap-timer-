@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { startCamera, stopCamera } from './utils/camera';
-import { loadOpenCV } from './utils/opencv';
 import CameraView from './components/CameraView';
 import TimerDisplay from './components/TimerDisplay';
 import Controls from './components/Controls';
@@ -128,14 +127,6 @@ export default function App() {
 
         setCameraReady(true);
         addLog('Camera ready!');
-
-        // Preload OpenCV in the background after camera is stable
-        setTimeout(() => {
-          addLog('Preloading OpenCV...');
-          loadOpenCV()
-            .then(() => addLog('OpenCV loaded!'))
-            .catch(() => addLog('OpenCV preload failed — will retry when needed'));
-        }, 3000);
       } catch (err) {
         addLog(`ERROR: ${err.name}: ${err.message}`);
         if (!cancelled) {
