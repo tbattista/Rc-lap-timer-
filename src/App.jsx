@@ -236,45 +236,33 @@ export default function App() {
     </div>
   );
 
-  if (error) {
-    return (
-      <div className="app">
-        <header className="app-header">
-          <h1>RC Lap Timer</h1>
-        </header>
-        <div className="error-message">{error}</div>
-        <div style={{ textAlign: 'center', padding: '16px' }}>
-          <button className="btn btn-primary" onClick={() => window.location.reload()}>
-            Retry
-          </button>
-        </div>
-        {debugPanel}
-      </div>
-    );
-  }
-
-  if (!cameraReady) {
-    return (
-      <div className="app">
-        <header className="app-header">
-          <h1>RC Lap Timer</h1>
-        </header>
-        <div className="loading-message">Starting camera...</div>
-        <video ref={videoRef} playsInline muted style={{ display: 'none' }} />
-        <canvas ref={canvasRef} style={{ display: 'none' }} />
-        {debugPanel}
-      </div>
-    );
-  }
-
   return (
     <div className="app">
+      {/* Persistent video element — never unmounted so the stream stays attached */}
+      <video ref={videoRef} playsInline muted style={{ display: 'none' }} />
+
       <header className="app-header">
         <h1>RC Lap Timer</h1>
       </header>
 
+      {error ? (
+        <>
+          <div className="error-message">{error}</div>
+          <div style={{ textAlign: 'center', padding: '16px' }}>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+              Retry
+            </button>
+          </div>
+          {debugPanel}
+        </>
+      ) : !cameraReady ? (
+        <>
+          <div className="loading-message">Starting camera...</div>
+          {debugPanel}
+        </>
+      ) : null}
+
       <CameraView
-        videoRef={videoRef}
         canvasRef={canvasRef}
         finishLine={finishLine}
         onSetLinePoint={handleSetLinePoint}
@@ -284,32 +272,36 @@ export default function App() {
         cameraReady={cameraReady}
       />
 
-      <TimerDisplay
-        raceState={raceState}
-        startTime={startTime}
-        lapStartTime={lapStartTime}
-        bestLap={bestLap}
-        lapCount={laps.length}
-      />
+      {cameraReady && (
+        <>
+          <TimerDisplay
+            raceState={raceState}
+            startTime={startTime}
+            lapStartTime={lapStartTime}
+            bestLap={bestLap}
+            lapCount={laps.length}
+          />
 
-      <Controls
-        raceState={raceState}
-        mode={mode}
-        onArm={handleArm}
-        onStop={handleStop}
-        onReset={handleReset}
-        onSetMode={setMode}
-        sensitivity={sensitivity}
-        onSensitivityChange={setSensitivity}
-        minLapTime={minLapTime}
-        onMinLapTimeChange={setMinLapTime}
-        tolerance={tolerance}
-        onToleranceChange={setTolerance}
-        hasLine={!!finishLine}
-        hasColor={!!targetColor}
-      />
+          <Controls
+            raceState={raceState}
+            mode={mode}
+            onArm={handleArm}
+            onStop={handleStop}
+            onReset={handleReset}
+            onSetMode={setMode}
+            sensitivity={sensitivity}
+            onSensitivityChange={setSensitivity}
+            minLapTime={minLapTime}
+            onMinLapTimeChange={setMinLapTime}
+            tolerance={tolerance}
+            onToleranceChange={setTolerance}
+            hasLine={!!finishLine}
+            hasColor={!!targetColor}
+          />
 
-      <LapHistory laps={laps} bestLap={bestLap} />
+          <LapHistory laps={laps} bestLap={bestLap} />
+        </>
+      )}
     </div>
   );
 }

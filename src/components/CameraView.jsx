@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 
 export default function CameraView({
-  videoRef,
   canvasRef,
   finishLine,
   onSetLinePoint,
@@ -103,13 +102,7 @@ export default function CameraView({
   }, [mode, onSetLinePoint, onPickColor]);
 
   return (
-    <div className="camera-view" ref={containerRef}>
-      <video
-        ref={videoRef}
-        playsInline
-        muted
-        style={{ display: 'none' }}
-      />
+    <div className="camera-view" ref={containerRef} style={cameraReady ? undefined : { display: 'none' }}>
       <canvas ref={canvasRef} className="camera-canvas" />
       <canvas
         ref={overlayCanvasRef}
