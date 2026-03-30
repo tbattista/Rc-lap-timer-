@@ -73,6 +73,19 @@ export async function startCamera(videoElement, log = () => {}) {
     log(`Metadata already available. readyState=${videoElement.readyState}`);
   }
 
+  // Wait for actual frame data to be available (prevents freeze on some devices)
+  if (videoElement.readyState < 2) {
+    log('readyState < 2, waiting for loadeddata (5s timeout)...');
+    await withTimeout(
+      new Promise((resolve) => {
+        videoElement.addEventListener('loadeddata', resolve, { once: true });
+      }),
+      5000,
+      'loadeddata'
+    );
+    log(`Data loaded. readyState=${videoElement.readyState}`);
+  }
+
   log(`Video dimensions: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
 
   log('Calling play()...');
@@ -81,7 +94,16 @@ export async function startCamera(videoElement, log = () => {}) {
     log('play() succeeded');
   } catch (playErr) {
     log(`play() failed: ${playErr.name}: ${playErr.message}`);
-    throw playErr;
+    // Retry once after a short delay (helps with iOS autoplay restrictions)
+    log('Retrying play() after 500ms...');
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      await videoElement.play();
+      log('play() retry succeeded');
+    } catch (retryErr) {
+      log(`play() retry failed: ${retryErr.name}: ${retryErr.message}`);
+      throw retryErr;
+    }
   }
 
   // Force repaint on iOS WebKit to ensure video frames render
