@@ -1,13 +1,13 @@
-export async function startCamera(videoElement, log = () => {}) {
-  const constraints = {
-    video: {
-      facingMode: 'environment',
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-    },
-    audio: false,
-  };
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
 
+export async function startCamera(videoElement, log = () => {}) {
   // iOS compatibility attributes
   videoElement.setAttribute('playsinline', '');
   videoElement.setAttribute('webkit-playsinline', '');
@@ -15,10 +15,43 @@ export async function startCamera(videoElement, log = () => {}) {
   videoElement.muted = true;
   videoElement.playsInline = true;
 
-  log('Calling getUserMedia...');
-  const stream = await navigator.mediaDevices.getUserMedia(constraints);
-  const tracks = stream.getTracks().map(t => `${t.kind}:${t.readyState}`).join(', ');
-  log(`getUserMedia success. Tracks: ${tracks}`);
+  // Try with back camera first, fall back to any camera
+  const constraintsList = [
+    {
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    },
+    {
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    },
+    {
+      video: true,
+      audio: false,
+    },
+  ];
+
+  let stream = null;
+  for (let i = 0; i < constraintsList.length; i++) {
+    const constraints = constraintsList[i];
+    const label = i === 0 ? 'environment (exact)' : i === 1 ? 'environment (ideal)' : 'any camera';
+    log(`Attempt ${i + 1}: getUserMedia with ${label}...`);
+    try {
+      stream = await withTimeout(
+        navigator.mediaDevices.getUserMedia(constraints),
+        8000,
+        'getUserMedia'
+      );
+      const tracks = stream.getTracks().map(t => `${t.kind}:${t.readyState}`).join(', ');
+      log(`getUserMedia success! Tracks: ${tracks}`);
+      break;
+    } catch (err) {
+      log(`Attempt ${i + 1} failed: ${err.name}: ${err.message}`);
+      if (i === constraintsList.length - 1) {
+        throw err;
+      }
+    }
+  }
 
   log('Setting srcObject on video element...');
   videoElement.srcObject = stream;
@@ -27,15 +60,13 @@ export async function startCamera(videoElement, log = () => {}) {
   // Wait for metadata with a timeout
   if (videoElement.readyState < 1) {
     log('readyState < 1, waiting for loadedmetadata (5s timeout)...');
-    await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('loadedmetadata timeout after 5s'));
-      }, 5000);
-      videoElement.addEventListener('loadedmetadata', () => {
-        clearTimeout(timer);
-        resolve();
-      }, { once: true });
-    });
+    await withTimeout(
+      new Promise((resolve) => {
+        videoElement.addEventListener('loadedmetadata', resolve, { once: true });
+      }),
+      5000,
+      'loadedmetadata'
+    );
     log(`Metadata loaded. readyState=${videoElement.readyState}`);
   } else {
     log(`Metadata already available. readyState=${videoElement.readyState}`);
