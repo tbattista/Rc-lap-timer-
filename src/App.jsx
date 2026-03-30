@@ -239,7 +239,22 @@ export default function App() {
   return (
     <div className="app">
       {/* Persistent video element — never unmounted so the stream stays attached */}
-      <video ref={videoRef} playsInline muted style={{ display: 'none' }} />
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '1px',
+          height: '1px',
+          opacity: 0.01,
+          pointerEvents: 'none',
+          zIndex: -9999,
+        }}
+      />
 
       <header className="app-header">
         <h1>RC Lap Timer</h1>
