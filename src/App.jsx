@@ -79,26 +79,20 @@ export default function App() {
     onDebug: handleDebug,
   });
 
-  // Load saved settings on mount
+  // Load saved settings on mount (only sliders, not setup state)
   useEffect(() => {
     const saved = loadSettings();
     if (saved) {
       if (saved.sensitivity) setSensitivity(saved.sensitivity);
       if (saved.minLapTime) setMinLapTime(saved.minLapTime);
       if (saved.tolerance) setTolerance(saved.tolerance);
-      if (saved.finishLine) setFinishLine(saved.finishLine);
-      if (saved.targetColor) setTargetColor(saved.targetColor);
-      if (saved.targetColorRgb) setTargetColorRgb(saved.targetColorRgb);
-      if (saved.finishLine && saved.targetColor) {
-        setMode('race');
-      }
     }
   }, []);
 
   // Save settings on change
   useEffect(() => {
     saveSettings({ sensitivity, minLapTime, tolerance, finishLine, targetColor, targetColorRgb });
-  }, [sensitivity, minLapTime, tolerance, finishLine, targetColor, targetColorRgb]);
+  }, [sensitivity, minLapTime, tolerance]);
 
   // Start camera
   useEffect(() => {
@@ -225,8 +219,13 @@ export default function App() {
     setMode(newMode);
     if (newMode === 'line') {
       setLinePoints([]);
+      setFinishLine(null);
+      setTargetColor(null);
+      setTargetColorRgb(null);
+      detector.stop();
+      setRaceState('idle');
     }
-  }, []);
+  }, [detector]);
 
   const debugPanel = debugLog.length > 0 && (
     <div className="debug-log">
