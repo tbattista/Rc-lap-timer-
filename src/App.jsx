@@ -243,6 +243,11 @@ export default function App() {
           <h1>RC Lap Timer</h1>
         </header>
         <div className="error-message">{error}</div>
+        <div style={{ textAlign: 'center', padding: '16px' }}>
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
         {debugPanel}
       </div>
     );
