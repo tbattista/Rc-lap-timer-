@@ -9,10 +9,17 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
   const wasCrossingRef = useRef(false);
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
+  const lastFrameTimeRef = useRef(0);
+  const cvLoadingRef = useRef(false);
 
   useEffect(() => {
+    cvLoadingRef.current = true;
     loadOpenCV().then((cv) => {
       cvRef.current = cv;
+      cvLoadingRef.current = false;
+    }).catch((err) => {
+      console.error('OpenCV load failed:', err);
+      cvLoadingRef.current = false;
     });
   }, []);
 
@@ -47,11 +54,26 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
     const video = videoRef.current;
 
     if (!cv || !canvas || !video || !targetColor || !finishLine) {
-      frameIdRef.current = requestAnimationFrame(detectFrame);
+      // Use slower polling when waiting for dependencies instead of spinning at 60fps
+      frameIdRef.current = setTimeout(() => {
+        frameIdRef.current = requestAnimationFrame(detectFrame);
+      }, cv ? 0 : 200); // 200ms backoff while waiting for OpenCV
       return;
     }
 
+    // Throttle to ~15fps to avoid blocking the main thread with OpenCV operations
+    const now = performance.now();
+    if (now - lastFrameTimeRef.current < 66) { // ~15fps
+      frameIdRef.current = requestAnimationFrame(detectFrame);
+      return;
+    }
+    lastFrameTimeRef.current = now;
+
     const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      frameIdRef.current = requestAnimationFrame(detectFrame);
+      return;
+    }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const linePixels = getLinePixels(finishLine, canvas.width, canvas.height);
@@ -137,6 +159,7 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
     runningRef.current = false;
     if (frameIdRef.current) {
       cancelAnimationFrame(frameIdRef.current);
+      clearTimeout(frameIdRef.current);
       frameIdRef.current = null;
     }
   }, []);
