@@ -51,8 +51,8 @@ describe('startCamera', () => {
   });
 
   it('should set iOS compatibility attributes', async () => {
-    // Simulate metadata already loaded
-    mockVideo.readyState = 1;
+    // Simulate metadata and data already loaded
+    mockVideo.readyState = 2;
 
     await startCamera(mockVideo);
 
@@ -64,7 +64,7 @@ describe('startCamera', () => {
   });
 
   it('should try environment camera first', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
 
     await startCamera(mockVideo);
 
@@ -74,7 +74,7 @@ describe('startCamera', () => {
   });
 
   it('should fall back to ideal environment, then any camera', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
 
     // Fail first two attempts
     navigator.mediaDevices.getUserMedia
@@ -91,7 +91,7 @@ describe('startCamera', () => {
   });
 
   it('should set srcObject on the video element', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
 
     await startCamera(mockVideo);
 
@@ -99,7 +99,7 @@ describe('startCamera', () => {
   });
 
   it('should call video.load() for iOS compatibility', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
 
     await startCamera(mockVideo);
 
@@ -116,6 +116,11 @@ describe('startCamera', () => {
     mockVideo.readyState = 1;
     mockVideo._fireEvent('loadedmetadata');
 
+    // Simulate data load after another tick
+    await new Promise(r => setTimeout(r, 10));
+    mockVideo.readyState = 2;
+    mockVideo._fireEvent('loadeddata');
+
     await promise;
 
     expect(mockVideo.addEventListener).toHaveBeenCalledWith(
@@ -126,7 +131,7 @@ describe('startCamera', () => {
   });
 
   it('should call video.play()', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
 
     await startCamera(mockVideo);
 
@@ -134,7 +139,7 @@ describe('startCamera', () => {
   });
 
   it('should return the stream', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
 
     const result = await startCamera(mockVideo);
 
@@ -142,7 +147,7 @@ describe('startCamera', () => {
   });
 
   it('should throw when all getUserMedia attempts fail', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
 
     const error = new DOMException('Not allowed', 'NotAllowedError');
     navigator.mediaDevices.getUserMedia.mockRejectedValue(error);
@@ -151,14 +156,14 @@ describe('startCamera', () => {
   });
 
   it('should throw when play() fails', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
     mockVideo.play.mockRejectedValue(new DOMException('Autoplay blocked', 'NotAllowedError'));
 
     await expect(startCamera(mockVideo)).rejects.toThrow('Autoplay blocked');
   });
 
   it('should log each step when log function provided', async () => {
-    mockVideo.readyState = 1;
+    mockVideo.readyState = 2;
     const logFn = vi.fn();
 
     await startCamera(mockVideo, logFn);
