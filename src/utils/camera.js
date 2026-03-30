@@ -106,6 +106,12 @@ export async function startCamera(videoElement, log = () => {}) {
     }
   }
 
+  // Force repaint on iOS WebKit to ensure video frames render
+  if (videoElement.style) {
+    videoElement.style.width = '99.99%';
+    requestAnimationFrame(() => { videoElement.style.width = '100%'; });
+  }
+
   return stream;
 }
 
