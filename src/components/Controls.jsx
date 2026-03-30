@@ -3,6 +3,8 @@ import React from 'react';
 export default function Controls({
   raceState,
   mode,
+  detectMode,
+  onDetectModeChange,
   onArm,
   onStop,
   onReset,
@@ -16,8 +18,27 @@ export default function Controls({
   hasLine,
   hasColor,
 }) {
+  const isMotion = detectMode === 'motion';
+  const canRace = isMotion ? hasLine : (hasLine && hasColor);
+
   return (
     <div className="controls">
+      {/* Detection mode toggle */}
+      <div className="mode-toggle">
+        <button
+          className={`mode-btn ${isMotion ? 'mode-btn-active' : ''}`}
+          onClick={() => onDetectModeChange('motion')}
+        >
+          Motion
+        </button>
+        <button
+          className={`mode-btn ${!isMotion ? 'mode-btn-active' : ''}`}
+          onClick={() => onDetectModeChange('color')}
+        >
+          Color
+        </button>
+      </div>
+
       <div className="controls-buttons">
         {mode !== 'race' ? (
           <>
@@ -27,13 +48,15 @@ export default function Controls({
             >
               Set Line
             </button>
-            <button
-              className={`btn ${mode === 'color' ? 'btn-active' : ''}`}
-              onClick={() => onSetMode('color')}
-            >
-              Pick Color
-            </button>
-            {hasLine && hasColor && (
+            {!isMotion && (
+              <button
+                className={`btn ${mode === 'color' ? 'btn-active' : ''}`}
+                onClick={() => onSetMode('color')}
+              >
+                Pick Color
+              </button>
+            )}
+            {canRace && (
               <button className="btn btn-primary" onClick={() => onSetMode('race')}>
                 Ready
               </button>
@@ -72,16 +95,18 @@ export default function Controls({
             onChange={(e) => onSensitivityChange(Number(e.target.value))}
           />
         </label>
-        <label>
-          Color Tolerance: {tolerance}
-          <input
-            type="range"
-            min="5"
-            max="40"
-            value={tolerance}
-            onChange={(e) => onToleranceChange(Number(e.target.value))}
-          />
-        </label>
+        {!isMotion && (
+          <label>
+            Color Tolerance: {tolerance}
+            <input
+              type="range"
+              min="5"
+              max="40"
+              value={tolerance}
+              onChange={(e) => onToleranceChange(Number(e.target.value))}
+            />
+          </label>
+        )}
         <label>
           Min Lap Time: {(minLapTime / 1000).toFixed(1)}s
           <input

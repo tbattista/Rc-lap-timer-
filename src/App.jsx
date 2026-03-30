@@ -32,6 +32,7 @@ export default function App() {
   const [lapStartTime, setLapStartTime] = useState(null);
 
   // Detection settings
+  const [detectMode, setDetectMode] = useState('motion'); // 'motion' | 'color'
   const [sensitivity, setSensitivity] = useState(30);
   const [minLapTime, setMinLapTime] = useState(3000);
   const [tolerance, setTolerance] = useState(15);
@@ -70,6 +71,7 @@ export default function App() {
   }, []);
 
   const detector = useDetector({
+    detectMode,
     targetColor,
     tolerance,
     finishLine,
@@ -153,12 +155,17 @@ export default function App() {
       const next = [...prev, { x, y }];
       if (next.length >= 2) {
         setFinishLine({ x1: next[0].x, y1: next[0].y, x2: next[1].x, y2: next[1].y });
-        setMode(targetColor ? 'race' : 'color');
+        // Motion mode skips color pick, go straight to race
+        if (detectMode === 'motion') {
+          setMode('race');
+        } else {
+          setMode(targetColor ? 'race' : 'color');
+        }
         return [];
       }
       return next;
     });
-  }, [targetColor]);
+  }, [targetColor, detectMode]);
 
   // Handle color pick
   const handlePickColor = useCallback((x, y) => {
@@ -288,6 +295,8 @@ export default function App() {
           <Controls
             raceState={raceState}
             mode={mode}
+            detectMode={detectMode}
+            onDetectModeChange={setDetectMode}
             onArm={handleArm}
             onStop={handleStop}
             onReset={handleReset}

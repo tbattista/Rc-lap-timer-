@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react';
 import { rgbToHsv } from '../utils/opencv';
 
-export default function useDetector({ targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing, onDebug }) {
+export default function useDetector({ detectMode, targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing, onDebug }) {
   const runningRef = useRef(false);
   const frameIdRef = useRef(null);
   const lastCrossingRef = useRef(0);
@@ -9,6 +9,7 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
   const canvasRef = useRef(null);
   const videoRef = useRef(null);
   const lastFrameTimeRef = useRef(0);
+  const prevPixelsRef = useRef(null);
 
   const getLinePixels = useCallback((line, width, height, bandWidth = 6) => {
     if (!line) return null;
@@ -38,13 +39,14 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
 
     const canvas = canvasRef.current;
     const video = videoRef.current;
+    const useMotion = detectMode === 'motion';
 
-    if (!canvas || !video || !targetColor || !finishLine) {
+    if (!canvas || !video || !finishLine || (!useMotion && !targetColor)) {
       frameIdRef.current = requestAnimationFrame(detectFrame);
       return;
     }
 
-    // Throttle to ~5fps — plenty for 30+ second laps
+    // Throttle to ~5fps
     const now = performance.now();
     if (now - lastFrameTimeRef.current < 200) {
       frameIdRef.current = requestAnimationFrame(detectFrame);
@@ -69,31 +71,68 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
       const w = canvas.width;
-      const tol = tolerance || 15;
 
-      const hLow = Math.max(0, targetColor.h - tol);
-      const hHigh = Math.min(180, targetColor.h + tol);
-      const sLow = Math.max(0, targetColor.s - 50);
-      const sHigh = Math.min(255, targetColor.s + 50);
-      const vLow = Math.max(0, targetColor.v - 50);
-      const vHigh = Math.min(255, targetColor.v + 50);
+      let matchRatio;
 
-      let matchCount = 0;
-      for (const { x, y } of linePixels) {
-        const idx = (y * w + x) * 4;
-        const hsv = rgbToHsv(data[idx], data[idx + 1], data[idx + 2]);
-        if (hsv.h >= hLow && hsv.h <= hHigh &&
-            hsv.s >= sLow && hsv.s <= sHigh &&
-            hsv.v >= vLow && hsv.v <= vHigh) {
-          matchCount++;
+      if (useMotion) {
+        // Motion detection: compare current pixels to previous frame
+        const currentPixels = new Uint8Array(linePixels.length * 3);
+        for (let i = 0; i < linePixels.length; i++) {
+          const idx = (linePixels[i].y * w + linePixels[i].x) * 4;
+          currentPixels[i * 3] = data[idx];
+          currentPixels[i * 3 + 1] = data[idx + 1];
+          currentPixels[i * 3 + 2] = data[idx + 2];
         }
+
+        if (!prevPixelsRef.current) {
+          prevPixelsRef.current = currentPixels;
+          onDebug?.('Capturing baseline...');
+          frameIdRef.current = requestAnimationFrame(detectFrame);
+          return;
+        }
+
+        // Count pixels that changed significantly
+        const changeThreshold = 30; // RGB difference per channel to count as "changed"
+        let changedCount = 0;
+        for (let i = 0; i < linePixels.length; i++) {
+          const j = i * 3;
+          const dr = Math.abs(currentPixels[j] - prevPixelsRef.current[j]);
+          const dg = Math.abs(currentPixels[j + 1] - prevPixelsRef.current[j + 1]);
+          const db = Math.abs(currentPixels[j + 2] - prevPixelsRef.current[j + 2]);
+          if (dr + dg + db > changeThreshold * 3) {
+            changedCount++;
+          }
+        }
+
+        prevPixelsRef.current = currentPixels;
+        matchRatio = changedCount / linePixels.length;
+      } else {
+        // Color detection: match against target color in HSV
+        const tol = tolerance || 15;
+        const hLow = Math.max(0, targetColor.h - tol);
+        const hHigh = Math.min(180, targetColor.h + tol);
+        const sLow = Math.max(0, targetColor.s - 50);
+        const sHigh = Math.min(255, targetColor.s + 50);
+        const vLow = Math.max(0, targetColor.v - 50);
+        const vHigh = Math.min(255, targetColor.v + 50);
+
+        let matchCount = 0;
+        for (const { x, y } of linePixels) {
+          const idx = (y * w + x) * 4;
+          const hsv = rgbToHsv(data[idx], data[idx + 1], data[idx + 2]);
+          if (hsv.h >= hLow && hsv.h <= hHigh &&
+              hsv.s >= sLow && hsv.s <= sHigh &&
+              hsv.v >= vLow && hsv.v <= vHigh) {
+            matchCount++;
+          }
+        }
+        matchRatio = matchCount / linePixels.length;
       }
 
-      const matchRatio = matchCount / linePixels.length;
       const threshold = (sensitivity || 50) / 1000;
-
       const isCrossing = matchRatio > threshold;
-      onDebug?.(`match: ${(matchRatio * 100).toFixed(1)}% thresh: ${(threshold * 100).toFixed(1)}%${isCrossing ? ' CROSSING!' : ''}`);
+      const label = useMotion ? 'motion' : 'match';
+      onDebug?.(`${label}: ${(matchRatio * 100).toFixed(1)}% thresh: ${(threshold * 100).toFixed(1)}%${isCrossing ? ' CROSSING!' : ''}`);
 
       if (isCrossing && !wasCrossingRef.current) {
         const elapsed = now - lastCrossingRef.current;
@@ -108,7 +147,7 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
     }
 
     frameIdRef.current = requestAnimationFrame(detectFrame);
-  }, [targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing, onDebug, getLinePixels]);
+  }, [detectMode, targetColor, tolerance, finishLine, sensitivity, minLapTime, onCrossing, onDebug, getLinePixels]);
 
   const start = useCallback((canvas, video) => {
     canvasRef.current = canvas;
@@ -116,12 +155,14 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
     runningRef.current = true;
     lastCrossingRef.current = 0;
     wasCrossingRef.current = false;
+    prevPixelsRef.current = null;
     onDebug?.('Detection active');
     frameIdRef.current = requestAnimationFrame(detectFrame);
   }, [detectFrame, onDebug]);
 
   const stop = useCallback(() => {
     runningRef.current = false;
+    prevPixelsRef.current = null;
     if (frameIdRef.current) {
       cancelAnimationFrame(frameIdRef.current);
       frameIdRef.current = null;

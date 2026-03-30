@@ -122,6 +122,31 @@ body {
   background: #1a1a2e;
 }
 
+.mode-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #333;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: #222;
+  color: #888;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode-btn-active {
+  background: #e94560;
+  color: #fff;
+}
+
 .controls-buttons {
   display: flex;
   gap: 8px;
