@@ -241,6 +241,7 @@ export default function App() {
       {/* Persistent video element — never unmounted so the stream stays attached */}
       <video
         ref={videoRef}
+        autoPlay
         playsInline
         muted
         style={{
