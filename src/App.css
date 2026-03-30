@@ -280,3 +280,31 @@ body {
   color: #888;
   font-size: 18px;
 }
+
+/* Debug Log */
+.debug-log {
+  margin: 12px;
+  padding: 8px;
+  background: #0a0a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  max-height: 250px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.debug-log-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #e94560;
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+
+.debug-log-line {
+  font-size: 11px;
+  color: #8f8;
+  line-height: 1.5;
+  word-break: break-all;
+}

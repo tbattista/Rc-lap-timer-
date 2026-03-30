@@ -34,6 +34,12 @@ export default function App() {
   const [tolerance, setTolerance] = useState(15);
   const [cameraReady, setCameraReady] = useState(false);
   const [error, setError] = useState(null);
+  const [debugLog, setDebugLog] = useState([]);
+
+  const addLog = useCallback((msg) => {
+    const ts = new Date().toLocaleTimeString();
+    setDebugLog((prev) => [...prev, `${ts}: ${msg}`]);
+  }, []);
 
   // Refs for race state in callbacks
   const raceStateRef = useRef(raceState);
@@ -94,33 +100,51 @@ export default function App() {
     let cancelled = false;
     async function init() {
       try {
+        addLog('Init starting...');
         const video = videoRef.current;
+        addLog(`videoRef exists: ${!!video}`);
         if (!video) return;
-        const stream = await startCamera(video);
-        if (cancelled) { stopCamera(stream); return; }
+
+        addLog(`navigator.mediaDevices exists: ${!!navigator.mediaDevices}`);
+        addLog(`getUserMedia exists: ${!!navigator.mediaDevices?.getUserMedia}`);
+
+        const stream = await startCamera(video, addLog);
+        if (cancelled) { stopCamera(stream); addLog('Cancelled after stream'); return; }
         streamRef.current = stream;
 
-        // Set canvas to match video dimensions
+        addLog('Setting canvas dimensions...');
         const canvas = canvasRef.current;
+        addLog(`canvasRef exists: ${!!canvas}`);
         const w = video.videoWidth || 640;
         const h = video.videoHeight || 480;
         canvas.width = w;
         canvas.height = h;
+        addLog(`Canvas set to ${w}x${h}`);
+
         setCameraReady(true);
+        addLog('Camera ready!');
       } catch (err) {
+        addLog(`ERROR: ${err.name}: ${err.message}`);
         if (!cancelled) {
-          setError('Camera access failed. Please allow camera permissions and reload.');
+          setError(`Camera failed: ${err.message}`);
           console.error(err);
         }
       }
     }
-    init();
+
+    // Timeout watchdog
+    const timeout = setTimeout(() => {
+      addLog('TIMEOUT: camera init took >10s, still waiting...');
+    }, 10000);
+
+    init().finally(() => clearTimeout(timeout));
+
     return () => {
       cancelled = true;
       stopCamera(streamRef.current);
       if (drawRafRef.current) cancelAnimationFrame(drawRafRef.current);
     };
-  }, []);
+  }, [addLog]);
 
   // Draw video frames to canvas (always, for preview)
   useEffect(() => {
@@ -203,6 +227,15 @@ export default function App() {
     detector.resetCooldown();
   }, [detector]);
 
+  const debugPanel = debugLog.length > 0 && (
+    <div className="debug-log">
+      <div className="debug-log-header">Debug Log</div>
+      {debugLog.map((line, i) => (
+        <div key={i} className="debug-log-line">{line}</div>
+      ))}
+    </div>
+  );
+
   if (error) {
     return (
       <div className="app">
@@ -210,6 +243,7 @@ export default function App() {
           <h1>RC Lap Timer</h1>
         </header>
         <div className="error-message">{error}</div>
+        {debugPanel}
       </div>
     );
   }
@@ -223,6 +257,7 @@ export default function App() {
         <div className="loading-message">Starting camera...</div>
         <video ref={videoRef} playsInline muted style={{ display: 'none' }} />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
+        {debugPanel}
       </div>
     );
   }
