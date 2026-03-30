@@ -6,6 +6,14 @@ export function loadOpenCV() {
   if (cvPromise) return cvPromise;
 
   cvPromise = new Promise((resolve, reject) => {
+    // Inject the script tag on demand if not already present
+    if (!document.querySelector('script[src*="opencv.js"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://docs.opencv.org/4.9.0/opencv.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+
     let elapsed = 0;
     const interval = 100;
     const maxWait = 30000; // 30s timeout for CDN load

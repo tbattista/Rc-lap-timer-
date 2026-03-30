@@ -12,16 +12,7 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
   const lastFrameTimeRef = useRef(0);
   const cvLoadingRef = useRef(false);
 
-  useEffect(() => {
-    cvLoadingRef.current = true;
-    loadOpenCV().then((cv) => {
-      cvRef.current = cv;
-      cvLoadingRef.current = false;
-    }).catch((err) => {
-      console.error('OpenCV load failed:', err);
-      cvLoadingRef.current = false;
-    });
-  }, []);
+  // OpenCV is loaded lazily when start() is called, not on mount
 
   const getLinePixels = useCallback((line, width, height, bandWidth = 6) => {
     if (!line) return null;
@@ -152,6 +143,8 @@ export default function useDetector({ targetColor, tolerance, finishLine, sensit
     runningRef.current = true;
     lastCrossingRef.current = 0;
     wasCrossingRef.current = false;
+    // Load OpenCV in background — detectFrame polls until it's ready
+    loadOpenCV().then((cv) => { cvRef.current = cv; }).catch(() => {});
     frameIdRef.current = requestAnimationFrame(detectFrame);
   }, [detectFrame]);
 
