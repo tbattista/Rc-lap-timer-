@@ -227,7 +227,7 @@ export default function App() {
         <h1>RC Lap Timer</h1>
       </header>
 
-      {error ? (
+      {error && (
         <>
           <div className="error-message">{error}</div>
           <div style={{ textAlign: 'center', padding: '16px' }}>
@@ -237,22 +237,25 @@ export default function App() {
           </div>
           {debugPanel}
         </>
-      ) : !cameraReady ? (
-        <>
-          <div className="loading-message">Starting camera...</div>
-          {debugPanel}
-        </>
-      ) : null}
+      )}
 
-      <CameraView
-        videoRef={videoRef}
-        finishLine={finishLine}
-        onSetLinePoint={handleSetLinePoint}
-        onPickColor={handlePickColor}
-        mode={mode}
-        targetColorRgb={targetColorRgb}
-        cameraReady={cameraReady}
-      />
+      <div style={{ position: 'relative' }}>
+        <CameraView
+          videoRef={videoRef}
+          finishLine={finishLine}
+          onSetLinePoint={handleSetLinePoint}
+          onPickColor={handlePickColor}
+          mode={mode}
+          targetColorRgb={targetColorRgb}
+          cameraReady={cameraReady}
+        />
+        {!cameraReady && !error && (
+          <div className="loading-overlay">
+            Starting camera...
+            {debugPanel}
+          </div>
+        )}
+      </div>
 
       {/* Hidden offscreen canvas for pixel operations (color sampling, detection) */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
